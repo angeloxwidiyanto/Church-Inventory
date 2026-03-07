@@ -21,19 +21,92 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
     const [selectedItem, setSelectedItem] = useState<Item | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState('All Items');
+
+    const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+        category: true,
+        location: true,
+        condition: true,
+        status: true,
+        brand: false,
+        tipe: false,
+        jenis: false,
+        serialNumber: false,
+        assuranceCategory: false,
+        ownership: false,
+        unitValue: false,
+        totalSumInsured: false,
+        notes: false,
+        images: false,
+        receipt: false,
+    });
+    const [showColumnDropdown, setShowColumnDropdown] = useState(false);
+    const [showFilterSortDropdown, setShowFilterSortDropdown] = useState(false);
+    const [filters, setFilters] = useState<Record<string, string>>({});
+    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+    const [galleryImages, setGalleryImages] = useState<string[]>([]);
 
     const filteredItems = initialItems.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (item.serialNumber && item.serialNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            item.location.toLowerCase().includes(searchQuery.toLowerCase());
+        const q = searchQuery.toLowerCase();
+        const matchesSearch = !q ||
+            item.name.toLowerCase().includes(q) ||
+            (item.serialNumber && item.serialNumber.toLowerCase().includes(q)) ||
+            item.location.toLowerCase().includes(q) ||
+            item.category.toLowerCase().includes(q) ||
+            (item.brand && item.brand.toLowerCase().includes(q)) ||
+            (item.tipe && item.tipe.toLowerCase().includes(q)) ||
+            (item.jenis && item.jenis.toLowerCase().includes(q)) ||
+            (item.assuranceCategory && item.assuranceCategory.toLowerCase().includes(q)) ||
+            (item.ownership && item.ownership.toLowerCase().includes(q)) ||
+            (item.notes && item.notes.toLowerCase().includes(q)) ||
+            (item.unitValue && item.unitValue.toLowerCase().includes(q)) ||
+            (item.totalSumInsured && item.totalSumInsured.toLowerCase().includes(q)) ||
+            item.condition.toLowerCase().includes(q) ||
+            item.status.toLowerCase().includes(q);
 
         if (!matchesSearch) return false;
 
-        if (categoryFilter === 'All Items') return true;
-        if (categoryFilter === 'Low Stock' && item.status === 'Low Stock') return true;
-        if (categoryFilter === 'Low Stock') return false;
-        return item.category === categoryFilter;
+
+
+        for (const [key, value] of Object.entries(filters)) {
+            if (!value) continue;
+            const itemValue = item[key as keyof Item];
+            if (itemValue === null || itemValue === undefined) return false;
+
+            if (typeof itemValue === 'string') {
+                if (!itemValue.toLowerCase().includes(value.toLowerCase())) {
+                    return false;
+                }
+            } else if (typeof itemValue === 'number') {
+                if (itemValue.toString() !== value) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }).sort((a, b) => {
+        if (!sortConfig) return 0;
+        const { key, direction } = sortConfig;
+
+        let aVal = a[key as keyof Item];
+        let bVal = b[key as keyof Item];
+
+        if (key === 'unitValue' || key === 'totalSumInsured') {
+            // Parse commas and numbers if they are string amounts, mostly they are stored as numbers or numeric strings
+            aVal = typeof aVal === 'string' ? parseFloat(aVal.replace(/[^0-9.-]+/g, "")) : aVal;
+            bVal = typeof bVal === 'string' ? parseFloat(bVal.replace(/[^0-9.-]+/g, "")) : bVal;
+        }
+
+        if (aVal === null || aVal === undefined || aVal === '') return direction === 'asc' ? 1 : -1;
+        if (bVal === null || bVal === undefined || bVal === '') return direction === 'asc' ? -1 : 1;
+
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+            return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
     });
 
     const handleAdd = () => {
@@ -75,19 +148,38 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
             return;
         }
 
-        const headers = ['ID', 'Name', 'Category', 'Location', 'Purchase Date', 'Condition', 'Status', 'Serial Number', 'Notes', 'Created At'];
-        const rows = filteredItems.map(item => [
-            item.id,
-            `"${item.name.replace(/"/g, '""')}"`,
-            `"${item.category}"`,
-            `"${item.location}"`,
-            item.purchaseDate || '',
-            `"${item.condition}"`,
-            `"${item.status}"`,
-            `"${item.serialNumber || ''}"`,
-            `"${(item.notes || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
-            item.createdAt
-        ]);
+        const headers = ['Name'];
+        if (visibleColumns.category) headers.push('Category');
+        if (visibleColumns.location) headers.push('Location');
+        if (visibleColumns.condition) headers.push('Condition');
+        if (visibleColumns.status) headers.push('Status');
+        if (visibleColumns.brand) headers.push('Brand');
+        if (visibleColumns.tipe) headers.push('Tipe');
+        if (visibleColumns.jenis) headers.push('Jenis');
+        if (visibleColumns.serialNumber) headers.push('Serial Number');
+        if (visibleColumns.assuranceCategory) headers.push('Assurance Category');
+        if (visibleColumns.ownership) headers.push('Ownership');
+        if (visibleColumns.unitValue) headers.push('Unit Value');
+        if (visibleColumns.totalSumInsured) headers.push('Total Sum Insured');
+        if (visibleColumns.notes) headers.push('Notes');
+
+        const rows = filteredItems.map(item => {
+            const row = [`"${item.name.replace(/"/g, '""')}"`];
+            if (visibleColumns.category) row.push(`"${item.category}"`);
+            if (visibleColumns.location) row.push(`"${item.location}"`);
+            if (visibleColumns.condition) row.push(`"${item.condition}"`);
+            if (visibleColumns.status) row.push(`"${item.status}"`);
+            if (visibleColumns.brand) row.push(`"${item.brand || ''}"`);
+            if (visibleColumns.tipe) row.push(`"${item.tipe || ''}"`);
+            if (visibleColumns.jenis) row.push(`"${item.jenis || ''}"`);
+            if (visibleColumns.serialNumber) row.push(`"${item.serialNumber || ''}"`);
+            if (visibleColumns.assuranceCategory) row.push(`"${item.assuranceCategory || ''}"`);
+            if (visibleColumns.ownership) row.push(`"${item.ownership || ''}"`);
+            if (visibleColumns.unitValue) row.push(`"${item.unitValue || ''}"`);
+            if (visibleColumns.totalSumInsured) row.push(`"${item.totalSumInsured || ''}"`);
+            if (visibleColumns.notes) row.push(`"${(item.notes || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`);
+            return row;
+        });
 
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -159,8 +251,9 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                             />
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                         <NotificationsDropdown items={initialItems} />
+                        <CSVUploadButton />
                         <button
                             onClick={handleAdd}
                             className="bg-primary text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
@@ -187,9 +280,161 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                             <span className="material-symbols-outlined text-base">delete</span> Delete {selectedIds.length}
                                         </button>
                                     )}
-                                    <button className="flex items-center gap-2 px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 cursor-pointer">
-                                        <span className="material-symbols-outlined text-base">filter_list</span> Filter
-                                    </button>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowFilterSortDropdown(!showFilterSortDropdown)}
+                                            className="flex items-center gap-2 px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 cursor-pointer"
+                                        >
+                                            <span className="material-symbols-outlined text-base">filter_list</span> Filter & Sort
+                                            {(Object.values(filters).some(Boolean) || sortConfig) && (
+                                                <span className="w-2 h-2 rounded-full bg-primary absolute top-2 right-2"></span>
+                                            )}
+                                        </button>
+                                        {showFilterSortDropdown && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setShowFilterSortDropdown(false)}></div>
+                                                <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-4 animate-in fade-in zoom-in duration-200 max-h-[60vh] overflow-y-auto">
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <div className="text-sm font-bold text-slate-800">Filter & Sort</div>
+                                                        <button
+                                                            onClick={() => { setFilters({}); setSortConfig(null); }}
+                                                            className="text-xs text-primary hover:text-blue-700 font-medium"
+                                                        >
+                                                            Clear All
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="mb-6 space-y-4">
+                                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Sort By</div>
+                                                        <div className="space-y-2">
+                                                            <select
+                                                                className="w-full text-sm border-slate-200 rounded-lg focus:ring-primary focus:border-primary"
+                                                                value={sortConfig?.key || ''}
+                                                                onChange={(e) => setSortConfig(e.target.value ? { key: e.target.value, direction: sortConfig?.direction || 'asc' } : null)}
+                                                            >
+                                                                <option value="">None</option>
+                                                                <option value="name">Name</option>
+                                                                {Object.entries(visibleColumns).filter(([_, isVisible]) => isVisible).map(([key]) => {
+                                                                    if (key === 'images' || key === 'receipt') return null;
+                                                                    const label = [
+                                                                        { label: 'Category', key: 'category' },
+                                                                        { label: 'Location', key: 'location' },
+                                                                        { label: 'Condition', key: 'condition' },
+                                                                        { label: 'Status', key: 'status' },
+                                                                        { label: 'Brand', key: 'brand' },
+                                                                        { label: 'Tipe', key: 'tipe' },
+                                                                        { label: 'Jenis', key: 'jenis' },
+                                                                        { label: 'Serial Number', key: 'serialNumber' },
+                                                                        { label: 'Assurance Category', key: 'assuranceCategory' },
+                                                                        { label: 'Ownership', key: 'ownership' },
+                                                                        { label: 'Unit Value', key: 'unitValue' },
+                                                                        { label: 'Total Sum Insured', key: 'totalSumInsured' },
+                                                                        { label: 'Notes', key: 'notes' },
+                                                                    ].find(col => col.key === key)?.label || key;
+                                                                    return <option key={key} value={key}>{label}</option>;
+                                                                })}
+                                                            </select>
+                                                            {sortConfig?.key && (
+                                                                <select
+                                                                    className="w-full text-sm border-slate-200 rounded-lg focus:ring-primary focus:border-primary"
+                                                                    value={sortConfig.direction}
+                                                                    onChange={(e) => setSortConfig({ ...sortConfig, direction: e.target.value as 'asc' | 'desc' })}
+                                                                >
+                                                                    <option value="asc">Ascending</option>
+                                                                    <option value="desc">Descending</option>
+                                                                </select>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Filters</div>
+                                                        {Object.entries(visibleColumns).filter(([_, isVisible]) => isVisible).map(([key]) => {
+                                                            if (key === 'images' || key === 'receipt') return null;
+                                                            const label = [
+                                                                { label: 'Category', key: 'category' },
+                                                                { label: 'Location', key: 'location' },
+                                                                { label: 'Condition', key: 'condition' },
+                                                                { label: 'Status', key: 'status' },
+                                                                { label: 'Brand', key: 'brand' },
+                                                                { label: 'Tipe', key: 'tipe' },
+                                                                { label: 'Jenis', key: 'jenis' },
+                                                                { label: 'Serial Number', key: 'serialNumber' },
+                                                                { label: 'Assurance Category', key: 'assuranceCategory' },
+                                                                { label: 'Ownership', key: 'ownership' },
+                                                                { label: 'Unit Value', key: 'unitValue' },
+                                                                { label: 'Total Sum Insured', key: 'totalSumInsured' },
+                                                                { label: 'Notes', key: 'notes' },
+                                                            ].find(col => col.key === key)?.label || key;
+
+                                                            return (
+                                                                <div key={key}>
+                                                                    <label className="block text-xs text-slate-600 mb-1">{label}</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={filters[key] || ''}
+                                                                        onChange={(e) => setFilters(prev => ({ ...prev, [key]: e.target.value }))}
+                                                                        placeholder={`Filter by ${label.toLowerCase()}...`}
+                                                                        className="w-full text-sm py-1.5 px-3 border border-slate-200 rounded-md focus:ring-primary focus:border-primary placeholder-slate-400"
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {Object.values(visibleColumns).filter(v => v).length <= 2 && (
+                                                            <div className="text-xs text-slate-500 italic">Enable more columns in "Show" to filter by them.</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                                            className="flex items-center gap-2 px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 cursor-pointer"
+                                        >
+                                            <span className="material-symbols-outlined text-base">view_column</span> Show
+                                        </button>
+                                        {showColumnDropdown && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setShowColumnDropdown(false)}></div>
+                                                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 py-3 animate-in fade-in zoom-in duration-200">
+                                                    <div className="text-xs font-bold text-slate-400 uppercase px-3 mb-2">Visible Columns</div>
+                                                    <label className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-not-allowed">
+                                                        <input type="checkbox" checked readOnly className="rounded text-primary focus:ring-primary border-slate-300 mr-3 cursor-not-allowed opacity-50" />
+                                                        <span className="text-sm text-slate-700 opacity-50">Name (Required)</span>
+                                                    </label>
+                                                    {[
+                                                        { label: 'Category', key: 'category' },
+                                                        { label: 'Location', key: 'location' },
+                                                        { label: 'Condition', key: 'condition' },
+                                                        { label: 'Status', key: 'status' },
+                                                        { label: 'Brand', key: 'brand' },
+                                                        { label: 'Tipe', key: 'tipe' },
+                                                        { label: 'Jenis', key: 'jenis' },
+                                                        { label: 'Serial Number', key: 'serialNumber' },
+                                                        { label: 'Assurance Category', key: 'assuranceCategory' },
+                                                        { label: 'Ownership', key: 'ownership' },
+                                                        { label: 'Unit Value', key: 'unitValue' },
+                                                        { label: 'Total Sum Insured', key: 'totalSumInsured' },
+                                                        { label: 'Notes', key: 'notes' },
+                                                        { label: 'Images', key: 'images' },
+                                                        { label: 'Receipt', key: 'receipt' },
+                                                    ].map(({ label, key }) => (
+                                                        <label key={key} className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={visibleColumns[key] || false}
+                                                                onChange={(e) => setVisibleColumns(prev => ({ ...prev, [key]: e.target.checked }))}
+                                                                className="rounded text-primary focus:ring-primary border-slate-300 mr-3 cursor-pointer"
+                                                            />
+                                                            <span className="text-sm text-slate-700">{label}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                     <button
                                         onClick={handleExport}
                                         className="flex items-center gap-2 px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 cursor-pointer"
@@ -198,21 +443,10 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                     </button>
                                 </div>
                             </div>
-                            <div className="flex gap-6 border-b border-slate-200 overflow-x-auto">
-                                {['All Items', 'A/V Equipment', 'Office Furniture', 'Consumable', 'Low Stock'].map((cat) => (
-                                    <button
-                                        key={cat}
-                                        onClick={() => setCategoryFilter(cat)}
-                                        className={`px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors cursor-pointer ${categoryFilter === cat
-                                            ? 'text-primary border-b-2 border-primary'
-                                            : cat === 'Low Stock'
-                                                ? 'text-red-500 hover:text-red-700'
-                                                : 'text-slate-500 hover:text-slate-700'
-                                            }`}
-                                    >
-                                        {cat}
-                                    </button>
-                                ))}
+                            <div className="border-b border-slate-200">
+                                <div className="px-4 py-3 text-sm font-semibold text-primary border-b-2 border-primary inline-block">
+                                    All Items
+                                </div>
                             </div>
                         </div>
 
@@ -235,17 +469,28 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                                     }}
                                                 />
                                             </th>
-                                            <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
-                                            <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Category</th>
-                                            <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Location</th>
-                                            <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Condition</th>
-                                            <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                            <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Name</th>
+                                            {visibleColumns.category && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Category</th>}
+                                            {visibleColumns.location && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Location</th>}
+                                            {visibleColumns.condition && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Condition</th>}
+                                            {visibleColumns.status && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Status</th>}
+                                            {visibleColumns.brand && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Brand</th>}
+                                            {visibleColumns.tipe && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Tipe</th>}
+                                            {visibleColumns.jenis && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Jenis</th>}
+                                            {visibleColumns.serialNumber && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Serial Number</th>}
+                                            {visibleColumns.assuranceCategory && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Assurance</th>}
+                                            {visibleColumns.ownership && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ownership</th>}
+                                            {visibleColumns.unitValue && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Nilai/Unit</th>}
+                                            {visibleColumns.totalSumInsured && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Total Sum Insured</th>}
+                                            {visibleColumns.notes && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap max-w-xs">Notes</th>}
+                                            {visibleColumns.images && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Images</th>}
+                                            {visibleColumns.receipt && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Resi</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                         {filteredItems.length === 0 ? (
                                             <tr>
-                                                <td colSpan={6} className="p-8 text-center text-slate-500">
+                                                <td colSpan={2 + Object.values(visibleColumns).filter(Boolean).length} className="p-8 text-center text-slate-500">
                                                     No items found. Click &apos;Add New Item&apos; to create one.
                                                 </td>
                                             </tr>
@@ -281,20 +526,86 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="p-4">
-                                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getCategoryColor(item.category)}`}>
-                                                            {item.category === 'A/V Equipment' ? 'A/V' : item.category}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 text-sm text-slate-600">{item.location}</td>
-                                                    <td className="p-4">
-                                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getConditionColor(item.condition)}`}>
-                                                            {item.condition}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        {getStatusIndicator(item.status)}
-                                                    </td>
+                                                    {visibleColumns.category && (
+                                                        <td className="p-4 whitespace-nowrap">
+                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getCategoryColor(item.category)}`}>
+                                                                {item.category === 'A/V Equipment' ? 'A/V' : item.category}
+                                                            </span>
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.location && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.location}</td>}
+                                                    {visibleColumns.condition && (
+                                                        <td className="p-4 whitespace-nowrap">
+                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getConditionColor(item.condition)}`}>
+                                                                {item.condition}
+                                                            </span>
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.status && (
+                                                        <td className="p-4 whitespace-nowrap">
+                                                            {getStatusIndicator(item.status)}
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.brand && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.brand || '-'}</td>}
+                                                    {visibleColumns.tipe && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.tipe || '-'}</td>}
+                                                    {visibleColumns.jenis && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.jenis || '-'}</td>}
+                                                    {visibleColumns.serialNumber && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.serialNumber || '-'}</td>}
+                                                    {visibleColumns.assuranceCategory && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.assuranceCategory || '-'}</td>}
+                                                    {visibleColumns.ownership && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.ownership || '-'}</td>}
+                                                    {visibleColumns.unitValue && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.unitValue || '-'}</td>}
+                                                    {visibleColumns.totalSumInsured && <td className="p-4 text-sm text-slate-600 whitespace-nowrap truncate max-w-[150px]">{item.totalSumInsured || '-'}</td>}
+                                                    {visibleColumns.notes && <td className="p-4 text-sm text-slate-600 truncate max-w-[200px]">{item.notes || '-'}</td>}
+                                                    {visibleColumns.images && (
+                                                        <td className="p-4 whitespace-nowrap">
+                                                            {item.images && JSON.parse(item.images as string).length > 0 ? (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setGalleryImages(JSON.parse(item.images as string));
+                                                                        setIsGalleryOpen(true);
+                                                                    }}
+                                                                    className="flex items-center gap-1 hover:text-primary transition-colors hover:bg-primary/10 px-2 py-1 rounded"
+                                                                >
+                                                                    <img src={JSON.parse(item.images as string)[0]} alt="thumb" className="w-8 h-8 object-cover rounded shadow-sm border border-slate-200" />
+                                                                    {JSON.parse(item.images as string).length > 1 && <span className="text-xs text-slate-500 font-medium">+{JSON.parse(item.images as string).length - 1}</span>}
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-slate-400 text-xs">-</span>
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.receipt && (
+                                                        <td className="p-4 whitespace-nowrap">
+                                                            {item.receipt ? (
+                                                                item.receipt.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setGalleryImages([item.receipt as string]);
+                                                                            setIsGalleryOpen(true);
+                                                                        }}
+                                                                        className="flex items-center gap-1 text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-sm">image</span>
+                                                                        <span className="text-xs font-semibold tracking-wide uppercase">Resi</span>
+                                                                    </button>
+                                                                ) : (
+                                                                    <a
+                                                                        href={item.receipt}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        className="flex items-center gap-1 text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-sm">description</span>
+                                                                        <span className="text-xs font-semibold tracking-wide uppercase">Resi</span>
+                                                                    </a>
+                                                                )
+                                                            ) : (
+                                                                <span className="text-slate-400 text-xs">-</span>
+                                                            )}
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))
                                         )}
@@ -356,8 +667,25 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                         </button>
                                         <button
                                             onClick={() => {
-                                                const csv = `Name,Value\nID,${selectedItem.id}\nName,"${selectedItem.name.replace(/"/g, '""')}"\nCategory,"${selectedItem.category}"\nLocation,"${selectedItem.location}"\nCondition,"${selectedItem.condition}"\nStatus,"${selectedItem.status}"\nSerial Number,"${selectedItem.serialNumber || ''}"\nNotes,"${(selectedItem.notes || '').replace(/"/g, '""')}"`;
-                                                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                                const csvRows = [
+                                                    ['ID', selectedItem.id],
+                                                    ['Name', `"${selectedItem.name.replace(/"/g, '""')}"`],
+                                                    ['Category', `"${selectedItem.category}"`],
+                                                    ['Location', `"${selectedItem.location}"`],
+                                                    ['Condition', `"${selectedItem.condition}"`],
+                                                    ['Status', `"${selectedItem.status}"`],
+                                                    ['Serial Number', `"${selectedItem.serialNumber || ''}"`],
+                                                    ['Assurance Category', `"${selectedItem.assuranceCategory || ''}"`],
+                                                    ['Brand', `"${selectedItem.brand || ''}"`],
+                                                    ['Tipe', `"${selectedItem.tipe || ''}"`],
+                                                    ['Jenis', `"${selectedItem.jenis || ''}"`],
+                                                    ['Ownership', `"${selectedItem.ownership || ''}"`],
+                                                    ['Unit Value', `"${selectedItem.unitValue || ''}"`],
+                                                    ['Total Sum Insured', `"${selectedItem.totalSumInsured || ''}"`],
+                                                    ['Notes', `"${(selectedItem.notes || '').replace(/"/g, '""')}"`]
+                                                ];
+                                                const csv = csvRows.map(row => row.join(',')).join('\n');
+                                                const blob = new Blob([`Name,Value\n${csv}`], { type: 'text/csv;charset=utf-8;' });
                                                 const url = URL.createObjectURL(blob);
                                                 const link = document.createElement('a');
                                                 link.href = url;
@@ -408,6 +736,53 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                         {selectedItem.condition.toUpperCase()}
                                     </span>
                                 </div>
+                                {selectedItem.assuranceCategory && (
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Assurance Category</p>
+                                        <p className="text-sm font-semibold text-slate-900">{selectedItem.assuranceCategory}</p>
+                                    </div>
+                                )}
+                                {(selectedItem.brand || selectedItem.tipe || selectedItem.jenis) && (
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Details</p>
+                                        <div className="text-sm text-slate-900 grid grid-cols-2 gap-2">
+                                            {selectedItem.brand && <div><span className="text-slate-500 text-xs">Brand:</span> <br />{selectedItem.brand}</div>}
+                                            {selectedItem.tipe && <div><span className="text-slate-500 text-xs">Tipe:</span> <br />{selectedItem.tipe}</div>}
+                                            {selectedItem.jenis && <div><span className="text-slate-500 text-xs">Jenis:</span> <br />{selectedItem.jenis}</div>}
+                                            {selectedItem.ownership && <div><span className="text-slate-500 text-xs">Ownership:</span> <br />{selectedItem.ownership}</div>}
+                                        </div>
+                                    </div>
+                                )}
+                                {(selectedItem.unitValue || selectedItem.totalSumInsured) && (
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Financials</p>
+                                        <div className="text-sm text-slate-900 grid grid-cols-2 gap-2">
+                                            {selectedItem.unitValue && <div><span className="text-slate-500 text-xs">Nilai/Unit:</span> <br />{selectedItem.unitValue}</div>}
+                                            {selectedItem.totalSumInsured && <div><span className="text-slate-500 text-xs">Sum Insured:</span> <br />{selectedItem.totalSumInsured}</div>}
+                                        </div>
+                                    </div>
+                                )}
+                                {selectedItem.receipt && (
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Resi Pembelian</p>
+                                        {selectedItem.receipt.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setGalleryImages([selectedItem.receipt as string]);
+                                                    setIsGalleryOpen(true);
+                                                }}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">image</span> View Receipt Image
+                                            </button>
+                                        ) : (
+                                            <a href={selectedItem.receipt} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors">
+                                                <span className="material-symbols-outlined text-sm">receipt_long</span> View Receipt PDF
+                                            </a>
+                                        )}
+                                    </div>
+                                )}
                                 {selectedItem.notes && (
                                     <div>
                                         <p className="text-xs font-bold text-slate-400 uppercase mb-2">Notes</p>
@@ -455,11 +830,11 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                 />
             )}
 
-            {isGalleryOpen && selectedItem && selectedItem.images && (
+            {isGalleryOpen && galleryImages.length > 0 && (
                 <ImageGalleryModal
                     isOpen={isGalleryOpen}
                     onClose={() => setIsGalleryOpen(false)}
-                    images={JSON.parse(selectedItem.images)}
+                    images={galleryImages}
                 />
             )}
         </div>

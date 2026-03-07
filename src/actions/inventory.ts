@@ -1,6 +1,6 @@
 'use server';
 
-import db, { Item } from '@/lib/db';
+import db, { Item, JourneyEvent } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
 import { v4 as uuidv4 } from 'uuid';
@@ -27,6 +27,20 @@ export async function uploadImages(formData: FormData): Promise<string[]> {
     return uploadedPaths;
 }
 
+export async function uploadReceipt(formData: FormData): Promise<string | null> {
+    const file = formData.get('receipt') as File | null;
+    if (!file || !file.name || file.size === 0) return null;
+
+    const buffer = await file.arrayBuffer();
+    const extension = file.name.split('.').pop() || 'pdf';
+    const filename = `receipt-${uuidv4()}.${extension}`;
+
+    const filepath = path.join(process.cwd(), 'public/uploads', filename);
+    await writeFile(filepath, Buffer.from(buffer));
+
+    return `/uploads/${filename}`;
+}
+
 export async function getItems(): Promise<Item[]> {
     const stmt = db.prepare('SELECT * FROM items ORDER BY createdAt DESC');
     return stmt.all() as Item[];
@@ -45,14 +59,31 @@ export async function createItem(data: Omit<Item, 'id' | 'createdAt' | 'updatedA
         description: 'Item added to inventory'
     };
 
+    let journey = data.journey && data.journey !== '[]' && data.journey !== '' ? JSON.parse(data.journey) : [];
+    journey = [creationEvent, ...journey];
+
     const stmt = db.prepare(`
-    INSERT INTO items (name, serialNumber, category, location, purchaseDate, condition, status, notes, images, journey)
-    VALUES (@name, @serialNumber, @category, @location, @purchaseDate, @condition, @status, @notes, @images, @journey)
+    INSERT INTO items (
+        name, serialNumber, category, location, purchaseDate, condition, status, notes, images, journey,
+        assuranceCategory, brand, tipe, jenis, receipt, unitValue, totalSumInsured, ownership
+    )
+    VALUES (
+        @name, @serialNumber, @category, @location, @purchaseDate, @condition, @status, @notes, @images, @journey,
+        @assuranceCategory, @brand, @tipe, @jenis, @receipt, @unitValue, @totalSumInsured, @ownership
+    )
   `);
     const info = stmt.run({
         ...data,
         images: data.images || null,
-        journey: JSON.stringify([creationEvent]),
+        journey: JSON.stringify(journey),
+        assuranceCategory: data.assuranceCategory || null,
+        brand: data.brand || null,
+        tipe: data.tipe || null,
+        jenis: data.jenis || null,
+        receipt: data.receipt || null,
+        unitValue: data.unitValue || null,
+        totalSumInsured: data.totalSumInsured || null,
+        ownership: data.ownership || null,
     });
     revalidatePath('/');
     return info.lastInsertRowid;
@@ -63,17 +94,65 @@ export async function updateItem(id: number, data: Partial<Omit<Item, 'id' | 'cr
     const currentItem = await getItemById(id);
     if (!currentItem) return;
 
-    const newEvents = [];
+    const newEvents: { id: string; date: string; type: string; description: string; previousValue?: string; newValue?: string }[] = [];
     const now = new Date().toISOString();
 
-    if (data.location && currentItem.location !== data.location) {
-        newEvents.push({ id: uuidv4(), date: now, type: 'Moved', description: 'Location changed', previousValue: currentItem.location, newValue: data.location });
+    // Helper to safely compare (treat null/undefined/empty string as equal)
+    const changed = (field: keyof Item) => {
+        const oldVal = (currentItem[field] as string | null) || '';
+        const newVal = (data[field as keyof typeof data] as string | null) || '';
+        return oldVal !== newVal;
+    };
+
+    // --- Core operational changes ---
+    if (data.location !== undefined && changed('location')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Moved', description: 'Location changed', previousValue: currentItem.location || '', newValue: data.location || '' });
     }
-    if (data.status && currentItem.status !== data.status) {
-        newEvents.push({ id: uuidv4(), date: now, type: 'Status Change', description: 'Status updated', previousValue: currentItem.status, newValue: data.status });
+    if (data.status !== undefined && changed('status')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Status Change', description: 'Status updated', previousValue: currentItem.status || '', newValue: data.status || '' });
     }
-    if (data.condition && currentItem.condition !== data.condition) {
-        newEvents.push({ id: uuidv4(), date: now, type: 'Condition Change', description: 'Condition updated', previousValue: currentItem.condition, newValue: data.condition });
+    if (data.condition !== undefined && changed('condition')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Condition Change', description: 'Condition updated', previousValue: currentItem.condition || '', newValue: data.condition || '' });
+    }
+
+    // --- Detail / metadata changes ---
+    if (data.name !== undefined && changed('name')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Detail Change', description: 'Name changed', previousValue: currentItem.name || '', newValue: data.name || '' });
+    }
+    if (data.category !== undefined && changed('category')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Detail Change', description: 'Category changed', previousValue: currentItem.category || '', newValue: data.category || '' });
+    }
+    if (data.assuranceCategory !== undefined && changed('assuranceCategory')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Detail Change', description: 'Assurance Category changed', previousValue: currentItem.assuranceCategory || '', newValue: data.assuranceCategory || '' });
+    }
+    if (data.brand !== undefined && changed('brand')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Detail Change', description: 'Brand changed', previousValue: currentItem.brand || '', newValue: data.brand || '' });
+    }
+    if (data.tipe !== undefined && changed('tipe')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Detail Change', description: 'Tipe changed', previousValue: currentItem.tipe || '', newValue: data.tipe || '' });
+    }
+    if (data.jenis !== undefined && changed('jenis')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Detail Change', description: 'Jenis changed', previousValue: currentItem.jenis || '', newValue: data.jenis || '' });
+    }
+    if (data.serialNumber !== undefined && changed('serialNumber')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Detail Change', description: 'Serial Number changed', previousValue: currentItem.serialNumber || '', newValue: data.serialNumber || '' });
+    }
+    if (data.ownership !== undefined && changed('ownership')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Detail Change', description: 'Ownership changed', previousValue: currentItem.ownership || '', newValue: data.ownership || '' });
+    }
+    if (data.notes !== undefined && changed('notes')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Note', description: 'Notes updated' });
+    }
+
+    // --- Financial changes ---
+    if (data.unitValue !== undefined && changed('unitValue')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Financial Change', description: 'Unit Value changed', previousValue: currentItem.unitValue || '', newValue: data.unitValue || '' });
+    }
+    if (data.totalSumInsured !== undefined && changed('totalSumInsured')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Financial Change', description: 'Total Sum Insured changed', previousValue: currentItem.totalSumInsured || '', newValue: data.totalSumInsured || '' });
+    }
+    if (data.purchaseDate !== undefined && changed('purchaseDate')) {
+        newEvents.push({ id: uuidv4(), date: now, type: 'Financial Change', description: 'Purchase Date changed', previousValue: currentItem.purchaseDate || '', newValue: data.purchaseDate || '' });
     }
 
     let journey = currentItem.journey ? JSON.parse(currentItem.journey) : [];
@@ -81,8 +160,8 @@ export async function updateItem(id: number, data: Partial<Omit<Item, 'id' | 'cr
     // Check if there are newly supplied manual events in data.journey
     if (data.journey) {
         const parsedSupplied = typeof data.journey === 'string' ? JSON.parse(data.journey) : data.journey;
-        // if user manually pushed a note, we just overwrite the journey since they pass back the full array
-        journey = parsedSupplied;
+        // Merge auto-detected events with user-supplied journey
+        journey = [...newEvents, ...parsedSupplied];
     } else {
         journey = [...newEvents, ...journey];
     }
@@ -119,10 +198,56 @@ export async function getStats() {
     };
 }
 
+export async function getLocationsStats(): Promise<{ name: string; count: number }[]> {
+    const stmt = db.prepare(`
+        SELECT location as name, COUNT(*) as count 
+        FROM items 
+        GROUP BY location 
+        ORDER BY count DESC
+    `);
+    return stmt.all() as { name: string; count: number }[];
+}
+
+export interface UnifiedActivityLog extends JourneyEvent {
+    itemId: number;
+    itemName: string;
+}
+
+export async function getAllActivityLogs(): Promise<UnifiedActivityLog[]> {
+    const items = await getItems();
+    const allLogs: UnifiedActivityLog[] = [];
+
+    for (const item of items) {
+        if (item.journey) {
+            try {
+                const journeyEvents = JSON.parse(item.journey) as import('@/lib/db').JourneyEvent[];
+                for (const event of journeyEvents) {
+                    allLogs.push({
+                        ...event,
+                        itemId: item.id,
+                        itemName: item.name
+                    });
+                }
+            } catch (e) {
+                console.error(`Error parsing journey for item ${item.id}`, e);
+            }
+        }
+    }
+
+    // Sort chronologically, newest first
+    return allLogs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
 export async function bulkInsertItems(items: Omit<Item, 'id' | 'createdAt' | 'updatedAt'>[]) {
     const insert = db.prepare(`
-        INSERT INTO items (name, serialNumber, category, location, purchaseDate, condition, status, notes, images, journey)
-        VALUES (@name, @serialNumber, @category, @location, @purchaseDate, @condition, @status, @notes, @images, @journey)
+        INSERT INTO items (
+            name, serialNumber, category, location, purchaseDate, condition, status, notes, images, journey,
+            assuranceCategory, brand, tipe, jenis, receipt, unitValue, totalSumInsured, ownership
+        )
+        VALUES (
+            @name, @serialNumber, @category, @location, @purchaseDate, @condition, @status, @notes, @images, @journey,
+            @assuranceCategory, @brand, @tipe, @jenis, @receipt, @unitValue, @totalSumInsured, @ownership
+        )
     `);
 
     const insertMany = db.transaction((itemsList) => {
@@ -131,6 +256,14 @@ export async function bulkInsertItems(items: Omit<Item, 'id' | 'createdAt' | 'up
                 ...i,
                 images: i.images || null,
                 journey: i.journey || null,
+                assuranceCategory: i.assuranceCategory || null,
+                brand: i.brand || null,
+                tipe: i.tipe || null,
+                jenis: i.jenis || null,
+                receipt: i.receipt || null,
+                unitValue: i.unitValue || null,
+                totalSumInsured: i.totalSumInsured || null,
+                ownership: i.ownership || null,
             });
         }
     });
