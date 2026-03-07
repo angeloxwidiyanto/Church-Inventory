@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getSetting } from '@/actions/settings';
 import WelcomeModal from './WelcomeModal';
+import BackupReminder from './BackupReminder';
 
 interface UserProfile {
     name: string;
@@ -44,6 +45,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return (
         <>
             {showWelcome && <WelcomeModal onComplete={handleWelcomeComplete} />}
+            {!showWelcome && profile && <BackupReminder />}
             {children}
         </>
     );

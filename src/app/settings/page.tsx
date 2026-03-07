@@ -2,10 +2,11 @@
 
 import Sidebar from '@/components/Sidebar';
 import { useState, useEffect } from 'react';
-import { getSetting, setSetting } from '@/actions/settings';
+import { getSetting, setSetting, resetAllData } from '@/actions/settings';
 
 export default function Settings() {
     const [isRestoring, setIsRestoring] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
 
     // Dynamic Settings State
     const [categories, setCategories] = useState<string[]>([]);
@@ -21,6 +22,8 @@ export default function Settings() {
     const [profileName, setProfileName] = useState('');
     const [profileRole, setProfileRole] = useState('');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [reminderDays, setReminderDays] = useState(0);
+    const [lastBackupDate, setLastBackupDate] = useState('');
 
     useEffect(() => {
         getSetting<string[]>('categories', ['A/V Equipment', 'Office Furniture', 'Consumable']).then(setCategories);
@@ -30,6 +33,8 @@ export default function Settings() {
             setProfileName(p.name);
             setProfileRole(p.role);
         });
+        getSetting<number>('backup_reminder_days', 0).then(setReminderDays);
+        getSetting<string>('last_backup_date', '').then(setLastBackupDate);
     }, []);
 
     const handleSaveProfile = async () => {
@@ -95,8 +100,15 @@ export default function Settings() {
         setIsSavingLocation(false);
     };
 
-    const handleBackup = () => {
+    const handleBackup = async () => {
+        await setSetting('last_backup_date', new Date().toISOString());
+        setLastBackupDate(new Date().toISOString());
         window.location.href = '/api/backup';
+    };
+
+    const handleReminderChange = async (days: number) => {
+        setReminderDays(days);
+        await setSetting('backup_reminder_days', days);
     };
 
     const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,6 +209,31 @@ export default function Settings() {
                                     <span className="material-symbols-outlined text-base">download</span>
                                     Download Backup
                                 </button>
+                            </div>
+
+                            <div className="flex items-start justify-between pb-6 border-b border-slate-100">
+                                <div>
+                                    <h4 className="font-semibold text-slate-800">Backup Reminder</h4>
+                                    <p className="text-sm text-slate-500 mt-1">Get a popup reminder to backup your data regularly.</p>
+                                    {lastBackupDate && (
+                                        <p className="text-xs text-slate-400 mt-2">
+                                            Last backup: {new Date(lastBackupDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                    )}
+                                </div>
+                                <select
+                                    value={reminderDays}
+                                    onChange={(e) => handleReminderChange(Number(e.target.value))}
+                                    className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 bg-white focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer"
+                                >
+                                    <option value={0}>Disabled</option>
+                                    <option value={3}>Every 3 days</option>
+                                    <option value={7}>Every 7 days</option>
+                                    <option value={14}>Every 14 days</option>
+                                    <option value={30}>Every 30 days</option>
+                                    <option value={60}>Every 60 days</option>
+                                    <option value={90}>Every 90 days</option>
+                                </select>
                             </div>
 
                             <div className="flex items-start justify-between">
@@ -389,6 +426,50 @@ export default function Settings() {
                                     The restore process is <span className="font-bold">cross-platform compatible</span>. You can seamlessly backup on a Mac and restore on Windows, or vice versa. The application automatically handles the file system differences for your uploaded images.
                                 </p>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div className="bg-white border-2 border-red-200 rounded-xl shadow-sm p-8">
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="material-symbols-outlined text-red-600">warning</span>
+                            <h3 className="text-lg font-bold text-red-600">Danger Zone</h3>
+                        </div>
+                        <p className="text-sm text-slate-600 mb-6">These actions are irreversible. Please proceed with extreme caution.</p>
+
+                        <div className="flex items-start justify-between p-4 bg-red-50 border border-red-100 rounded-lg">
+                            <div>
+                                <h4 className="font-semibold text-red-800">Delete All Data & Start Fresh</h4>
+                                <p className="text-sm text-red-600/80 mt-1">Permanently delete all inventory items, settings, uploaded images, and user profile. This cannot be undone.</p>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    const firstConfirm = confirm('⚠️ Are you sure you want to delete ALL data? This will remove every item, setting, and uploaded image. This action CANNOT be undone.');
+                                    if (!firstConfirm) return;
+
+                                    const typed = prompt('To confirm, please type DELETE in all caps:');
+                                    if (typed !== 'DELETE') {
+                                        alert('Reset cancelled. The text did not match.');
+                                        return;
+                                    }
+
+                                    setIsResetting(true);
+                                    try {
+                                        await resetAllData();
+                                        alert('All data has been deleted. The app will now reload.');
+                                        window.location.href = '/';
+                                    } catch (error) {
+                                        console.error(error);
+                                        alert('Failed to reset data. Please try again.');
+                                        setIsResetting(false);
+                                    }
+                                }}
+                                disabled={isResetting}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50 shrink-0 flex items-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-sm">delete_forever</span>
+                                {isResetting ? 'Deleting...' : 'Delete Everything'}
+                            </button>
                         </div>
                     </div>
                 </div>

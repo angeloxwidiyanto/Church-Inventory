@@ -2,6 +2,8 @@
 
 import db from '@/lib/db';
 import { revalidatePath } from 'next/cache';
+import { existsSync, readdirSync, unlinkSync } from 'fs';
+import path from 'path';
 
 export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
     try {
@@ -25,9 +27,38 @@ export async function setSetting(key: string, value: any): Promise<void> {
     `);
         stmt.run(key, JSON.stringify(value));
         revalidatePath('/settings');
-        revalidatePath('/'); // Revalidate main page so ItemModal gets fresh data
+        revalidatePath('/');
     } catch (error) {
         console.error(`Error setting setting ${key}:`, error);
         throw new Error('Failed to save setting');
     }
 }
+
+export async function resetAllData(): Promise<void> {
+    try {
+        // Delete all items
+        db.prepare('DELETE FROM items').run();
+        // Delete all settings (including user profile, categories, etc.)
+        db.prepare('DELETE FROM system_settings').run();
+
+        // Clear uploaded images
+        const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+        if (existsSync(uploadsDir)) {
+            const files = readdirSync(uploadsDir);
+            for (const file of files) {
+                try {
+                    unlinkSync(path.join(uploadsDir, file));
+                } catch {
+                    // skip files that can't be deleted
+                }
+            }
+        }
+
+        revalidatePath('/');
+        revalidatePath('/settings');
+    } catch (error) {
+        console.error('Error resetting data:', error);
+        throw new Error('Failed to reset data');
+    }
+}
+
