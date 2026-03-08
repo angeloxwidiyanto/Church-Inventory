@@ -1,4 +1,4 @@
-import db from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
@@ -9,7 +9,7 @@ export async function GET() {
 
     try {
         // Perform safe SQLite backup
-        await db.backup(backupPath);
+        await getDb().backup(backupPath);
 
         // Create a new zip
         const zip = new AdmZip();

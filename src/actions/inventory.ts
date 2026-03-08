@@ -1,6 +1,6 @@
 'use server';
 
-import db, { Item, JourneyEvent } from '@/lib/db';
+import { getDb, Item, JourneyEvent } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
 import { v4 as uuidv4 } from 'uuid';
@@ -42,12 +42,12 @@ export async function uploadReceipt(formData: FormData): Promise<string | null> 
 }
 
 export async function getItems(): Promise<Item[]> {
-    const stmt = db.prepare('SELECT * FROM items ORDER BY createdAt DESC');
+    const stmt = getDb().prepare('SELECT * FROM items ORDER BY createdAt DESC');
     return stmt.all() as Item[];
 }
 
 export async function getItemById(id: number): Promise<Item | undefined> {
-    const stmt = db.prepare('SELECT * FROM items WHERE id = ?');
+    const stmt = getDb().prepare('SELECT * FROM items WHERE id = ?');
     return stmt.get(id) as Item | undefined;
 }
 
@@ -62,7 +62,7 @@ export async function createItem(data: Omit<Item, 'id' | 'createdAt' | 'updatedA
     let journey = data.journey && data.journey !== '[]' && data.journey !== '' ? JSON.parse(data.journey) : [];
     journey = [creationEvent, ...journey];
 
-    const stmt = db.prepare(`
+    const stmt = getDb().prepare(`
     INSERT INTO items (
         name, serialNumber, category, location, purchaseDate, condition, status, notes, images, journey,
         assuranceCategory, brand, tipe, jenis, receipt, unitValue, totalSumInsured, ownership
@@ -172,7 +172,7 @@ export async function updateItem(id: number, data: Partial<Omit<Item, 'id' | 'cr
 
     if (!updates) return;
 
-    const stmt = db.prepare(`
+    const stmt = getDb().prepare(`
     UPDATE items 
     SET ${updates}, updatedAt = CURRENT_TIMESTAMP
     WHERE id = @id
@@ -183,14 +183,33 @@ export async function updateItem(id: number, data: Partial<Omit<Item, 'id' | 'cr
 }
 
 export async function deleteItem(id: number) {
-    const stmt = db.prepare('DELETE FROM items WHERE id = ?');
+    // Fetch the item info before deleting so we can log it
+    const item = await getItemById(id);
+    const itemName = item?.name || `Item #${id}`;
+
+    const stmt = getDb().prepare('DELETE FROM items WHERE id = ?');
     stmt.run(id);
+
+    // Log the deletion to the persistent activity_logs table
+    const logStmt = getDb().prepare(`
+        INSERT INTO activity_logs (id, date, type, description, itemId, itemName)
+        VALUES (@id, @date, @type, @description, @itemId, @itemName)
+    `);
+    logStmt.run({
+        id: uuidv4(),
+        date: new Date().toISOString(),
+        type: 'Deleted',
+        description: `Item "${itemName}" was deleted from inventory`,
+        itemId: id,
+        itemName,
+    });
+
     revalidatePath('/');
 }
 
 export async function getStats() {
-    const totalItemsStmt = db.prepare('SELECT COUNT(*) as count FROM items');
-    const locationsStmt = db.prepare('SELECT COUNT(DISTINCT location) as count FROM items');
+    const totalItemsStmt = getDb().prepare('SELECT COUNT(*) as count FROM items');
+    const locationsStmt = getDb().prepare('SELECT COUNT(DISTINCT location) as count FROM items');
 
     return {
         totalItems: (totalItemsStmt.get() as { count: number }).count,
@@ -199,7 +218,7 @@ export async function getStats() {
 }
 
 export async function getLocationsStats(): Promise<{ name: string; count: number }[]> {
-    const stmt = db.prepare(`
+    const stmt = getDb().prepare(`
         SELECT location as name, COUNT(*) as count 
         FROM items 
         GROUP BY location 
@@ -217,6 +236,7 @@ export async function getAllActivityLogs(): Promise<UnifiedActivityLog[]> {
     const items = await getItems();
     const allLogs: UnifiedActivityLog[] = [];
 
+    // Collect journey-based logs from existing items
     for (const item of items) {
         if (item.journey) {
             try {
@@ -234,12 +254,20 @@ export async function getAllActivityLogs(): Promise<UnifiedActivityLog[]> {
         }
     }
 
+    // Collect persistent logs (e.g. deletions) from the activity_logs table
+    try {
+        const persistentLogs = getDb().prepare('SELECT * FROM activity_logs ORDER BY date DESC').all() as UnifiedActivityLog[];
+        allLogs.push(...persistentLogs);
+    } catch (e) {
+        console.error('Error fetching persistent activity logs', e);
+    }
+
     // Sort chronologically, newest first
     return allLogs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
 export async function bulkInsertItems(items: Omit<Item, 'id' | 'createdAt' | 'updatedAt'>[]) {
-    const insert = db.prepare(`
+    const insert = getDb().prepare(`
         INSERT INTO items (
             name, serialNumber, category, location, purchaseDate, condition, status, notes, images, journey,
             assuranceCategory, brand, tipe, jenis, receipt, unitValue, totalSumInsured, ownership
@@ -250,7 +278,7 @@ export async function bulkInsertItems(items: Omit<Item, 'id' | 'createdAt' | 'up
         )
     `);
 
-    const insertMany = db.transaction((itemsList) => {
+    const insertMany = getDb().transaction((itemsList: typeof items) => {
         for (const i of itemsList) {
             insert.run({
                 ...i,
@@ -274,8 +302,30 @@ export async function bulkInsertItems(items: Omit<Item, 'id' | 'createdAt' | 'up
 
 export async function bulkDeleteItems(ids: number[]) {
     if (ids.length === 0) return;
+
+    // Fetch items before deleting so we can log them
     const placeholders = ids.map(() => '?').join(',');
-    const stmt = db.prepare(`DELETE FROM items WHERE id IN (${placeholders})`);
-    stmt.run(...ids);
+    const items = getDb().prepare(`SELECT id, name FROM items WHERE id IN (${placeholders})`).all(...ids) as { id: number; name: string }[];
+
+    const deleteStmt = getDb().prepare(`DELETE FROM items WHERE id IN (${placeholders})`);
+    deleteStmt.run(...ids);
+
+    // Log each deletion to the persistent activity_logs table
+    const logStmt = getDb().prepare(`
+        INSERT INTO activity_logs (id, date, type, description, itemId, itemName)
+        VALUES (@id, @date, @type, @description, @itemId, @itemName)
+    `);
+    const now = new Date().toISOString();
+    for (const item of items) {
+        logStmt.run({
+            id: uuidv4(),
+            date: now,
+            type: 'Deleted',
+            description: `Item "${item.name}" was deleted from inventory`,
+            itemId: item.id,
+            itemName: item.name,
+        });
+    }
+
     revalidatePath('/');
 }

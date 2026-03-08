@@ -1,7 +1,7 @@
 'use client';
 
 import { Item } from '@/lib/db';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import ItemModal from './ItemModal';
@@ -21,6 +21,19 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
     const [selectedItem, setSelectedItem] = useState<Item | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Keep selectedItem / editingItem in sync when initialItems refreshes (e.g. after router.refresh())
+    useEffect(() => {
+        if (selectedItem) {
+            const fresh = initialItems.find(i => i.id === selectedItem.id);
+            if (fresh) setSelectedItem(fresh);
+        }
+        if (editingItem) {
+            const fresh = initialItems.find(i => i.id === editingItem.id);
+            if (fresh) setEditingItem(fresh);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialItems]);
 
     const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
         category: true,
@@ -143,7 +156,12 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
     };
 
     const handleExport = () => {
-        if (filteredItems.length === 0) {
+        // Export only checked items if any are selected, otherwise export all filtered items
+        const itemsToExport = selectedIds.length > 0
+            ? filteredItems.filter(item => selectedIds.includes(item.id))
+            : filteredItems;
+
+        if (itemsToExport.length === 0) {
             alert('No items to export.');
             return;
         }
@@ -163,7 +181,7 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
         if (visibleColumns.totalSumInsured) headers.push('Total Sum Insured');
         if (visibleColumns.notes) headers.push('Notes');
 
-        const rows = filteredItems.map(item => {
+        const rows = itemsToExport.map(item => {
             const row = [`"${item.name.replace(/"/g, '""')}"`];
             if (visibleColumns.category) row.push(`"${item.category}"`);
             if (visibleColumns.location) row.push(`"${item.location}"`);

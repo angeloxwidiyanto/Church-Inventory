@@ -12,6 +12,11 @@ function getEventIcon(type: string) {
         case 'Note': return 'sticky_note_2';
         case 'Detail Change': return 'edit_document';
         case 'Financial Change': return 'payments';
+        case 'Deleted': return 'delete';
+        case 'Inspection': return 'fact_check';
+        case 'Repair': return 'home_repair_service';
+        case 'Lent Out': return 'output';
+        case 'Returned': return 'keyboard_return';
         default: return 'history';
     }
 }
@@ -26,6 +31,11 @@ function getEventColor(type: string) {
         case 'Note': return 'text-slate-600 bg-slate-50 border-slate-200';
         case 'Detail Change': return 'text-teal-600 bg-teal-50 border-teal-200';
         case 'Financial Change': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+        case 'Deleted': return 'text-red-600 bg-red-50 border-red-200';
+        case 'Inspection': return 'text-amber-600 bg-amber-50 border-amber-200';
+        case 'Repair': return 'text-pink-600 bg-pink-50 border-pink-200';
+        case 'Lent Out': return 'text-indigo-600 bg-indigo-50 border-indigo-200';
+        case 'Returned': return 'text-cyan-600 bg-cyan-50 border-cyan-200';
         default: return 'text-slate-600 bg-slate-50 border-slate-200';
     }
 }

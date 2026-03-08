@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
+import { reopenDatabase } from '@/lib/db';
 
 export async function POST(request: Request) {
     try {
@@ -31,6 +32,9 @@ export async function POST(request: Request) {
         const shmPath = `${dbPath}-shm`;
         if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
         if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
+        // Re-open the database connection so the server uses the restored data
+        reopenDatabase();
 
         // 2. Extract the uploads folder
         const uploadsDest = path.join(process.cwd(), 'public', 'uploads');
@@ -62,3 +66,4 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Restore failed' }, { status: 500 });
     }
 }
+

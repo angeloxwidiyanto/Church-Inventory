@@ -1,13 +1,13 @@
 'use server';
 
-import db from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { existsSync, readdirSync, unlinkSync } from 'fs';
 import path from 'path';
 
 export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
     try {
-        const stmt = db.prepare('SELECT value FROM system_settings WHERE key = ?');
+        const stmt = getDb().prepare('SELECT value FROM system_settings WHERE key = ?');
         const row = stmt.get(key) as { value: string } | undefined;
         if (row && row.value) {
             return JSON.parse(row.value) as T;
@@ -20,7 +20,7 @@ export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
 
 export async function setSetting(key: string, value: any): Promise<void> {
     try {
-        const stmt = db.prepare(`
+        const stmt = getDb().prepare(`
       INSERT INTO system_settings (key, value) 
       VALUES (?, ?) 
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -37,9 +37,9 @@ export async function setSetting(key: string, value: any): Promise<void> {
 export async function resetAllData(): Promise<void> {
     try {
         // Delete all items
-        db.prepare('DELETE FROM items').run();
+        getDb().prepare('DELETE FROM items').run();
         // Delete all settings (including user profile, categories, etc.)
-        db.prepare('DELETE FROM system_settings').run();
+        getDb().prepare('DELETE FROM system_settings').run();
 
         // Clear uploaded images
         const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
