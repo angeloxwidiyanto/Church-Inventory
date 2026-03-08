@@ -69,7 +69,7 @@ export default function CSVUploadButton() {
             skipEmptyLines: true,
             complete: (results) => {
                 try {
-                    const itemsData: ParsedItem[] = results.data.map((row: any) => ({
+                    const itemsData: ParsedItem[] = (results.data as Record<string, string>[]).map((row) => ({
                         name: row.name || row.Name || row.Item || 'Unknown Item',
                         serialNumber: row.serialNumber || row['Serial Number'] || row.SN || '',
                         category: row.category || row.Category || 'Consumable',

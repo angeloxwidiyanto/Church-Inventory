@@ -18,7 +18,7 @@ export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
     return defaultValue;
 }
 
-export async function setSetting(key: string, value: any): Promise<void> {
+export async function setSetting(key: string, value: unknown): Promise<void> {
     try {
         const stmt = getDb().prepare(`
       INSERT INTO system_settings (key, value) 
@@ -40,6 +40,12 @@ export async function resetAllData(): Promise<void> {
         getDb().prepare('DELETE FROM items').run();
         // Delete all settings (including user profile, categories, etc.)
         getDb().prepare('DELETE FROM system_settings').run();
+        // Delete all activity logs
+        try {
+            getDb().prepare('DELETE FROM activity_logs').run();
+        } catch {
+            // ignore if table doesn't exist yet
+        }
 
         // Clear uploaded images
         const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
@@ -54,8 +60,8 @@ export async function resetAllData(): Promise<void> {
             }
         }
 
-        revalidatePath('/');
-        revalidatePath('/settings');
+        // Revalidate the entire layout so all pages (incl locations, activity-log) show fresh data
+        revalidatePath('/', 'layout');
     } catch (error) {
         console.error('Error resetting data:', error);
         throw new Error('Failed to reset data');

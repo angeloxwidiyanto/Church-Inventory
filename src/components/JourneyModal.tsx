@@ -84,10 +84,10 @@ export default function JourneyModal({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
 
-    if (!isOpen) return null;
-
-    const events: JourneyEvent[] = item.journey ? JSON.parse(item.journey) : [];
-    events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const events: JourneyEvent[] = useMemo(() => {
+        const parsed: JourneyEvent[] = item.journey ? JSON.parse(item.journey) : [];
+        return parsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [item.journey]);
 
     // --- Filtered events ---
     const filteredEvents = events.filter(event => {
@@ -290,6 +290,8 @@ export default function JourneyModal({
         return `${Math.floor(days / 365)} years ago`;
     };
 
+    if (!isOpen) return null;
+
     return (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 h-[85vh]">
@@ -469,6 +471,7 @@ export default function JourneyModal({
                                             <div className="mt-3 flex flex-wrap gap-2">
                                                 {event.attachments.map((src, i) => (
                                                     <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                                         <img src={src} alt={`Attachment ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:scale-105 transition-all" />
                                                     </a>
                                                 ))}

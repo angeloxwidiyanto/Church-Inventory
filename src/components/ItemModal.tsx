@@ -437,6 +437,7 @@ export default function ItemModal({
                                         <div className="flex gap-3 overflow-x-auto py-2 p-2 bg-slate-50 rounded-lg border border-slate-100">
                                             {existingImages.map((url, i) => (
                                                 <div key={`exist-${i}`} className="relative w-24 h-24 shrink-0 rounded-lg border shadow-sm border-slate-200 overflow-hidden group bg-white">
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img src={url} alt={`Existing ${i + 1}`} className="w-full h-full object-cover" />
                                                     <button
                                                         type="button"
@@ -451,6 +452,7 @@ export default function ItemModal({
                                             {previewUrls.map((url, i) => (
                                                 <div key={`new-${i}`} className="relative w-24 h-24 shrink-0 rounded-lg border-2 shadow-sm border-blue-400 overflow-hidden group bg-white">
                                                     <div className="absolute top-1 right-1 bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm z-10 font-bold tracking-wider leading-none">NEW</div>
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img src={url} alt={`New ${i + 1}`} className="w-full h-full object-cover" />
                                                     <button
                                                         type="button"

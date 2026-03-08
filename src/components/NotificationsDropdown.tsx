@@ -68,7 +68,7 @@ export default function NotificationsDropdown({ items }: { items: Item[] }) {
                             <div className="p-6 text-center flex flex-col items-center justify-center">
                                 <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">notifications_paused</span>
                                 <p className="text-sm text-slate-500 font-medium">No new notifications</p>
-                                <p className="text-xs text-slate-400 mt-1">You're all caught up!</p>
+                                <p className="text-xs text-slate-400 mt-1">You&apos;re all caught up!</p>
                             </div>
                         )}
                     </div>

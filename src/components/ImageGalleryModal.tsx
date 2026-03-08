@@ -51,6 +51,7 @@ export default function ImageGalleryModal({
                     </button>
                 )}
 
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                     src={images[currentIndex]}
                     alt={`Gallery Image ${currentIndex + 1}`}
@@ -77,6 +78,7 @@ export default function ImageGalleryModal({
                             className={`relative w-16 h-16 rounded-xl overflow-hidden transition-all cursor-pointer border-2 ${idx === currentIndex ? 'border-primary ring-2 ring-primary/50' : 'border-transparent opacity-50 hover:opacity-100'
                                 }`}
                         >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
                         </button>
                     ))}

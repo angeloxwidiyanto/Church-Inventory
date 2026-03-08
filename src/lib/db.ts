@@ -102,7 +102,7 @@ function initializeDatabase(database: InstanceType<typeof Database>) {
 
 // Extend globalThis type for TypeScript
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __db: InstanceType<typeof Database> | undefined;
 }
 

@@ -3,7 +3,6 @@
 import { Item } from '@/lib/db';
 import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import Header from './Header';
 import ItemModal from './ItemModal';
 import CSVUploadButton from './CSVUploadButton';
 import NotificationsDropdown from './NotificationsDropdown';
@@ -332,7 +331,7 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                                             >
                                                                 <option value="">None</option>
                                                                 <option value="name">Name</option>
-                                                                {Object.entries(visibleColumns).filter(([_, isVisible]) => isVisible).map(([key]) => {
+                                                                {Object.entries(visibleColumns).filter((entry) => entry[1]).map(([key]) => {
                                                                     if (key === 'images' || key === 'receipt') return null;
                                                                     const label = [
                                                                         { label: 'Category', key: 'category' },
@@ -367,7 +366,7 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
 
                                                     <div className="space-y-4">
                                                         <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Filters</div>
-                                                        {Object.entries(visibleColumns).filter(([_, isVisible]) => isVisible).map(([key]) => {
+                                                        {Object.entries(visibleColumns).filter((entry) => entry[1]).map(([key]) => {
                                                             if (key === 'images' || key === 'receipt') return null;
                                                             const label = [
                                                                 { label: 'Category', key: 'category' },
@@ -399,7 +398,7 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                                             );
                                                         })}
                                                         {Object.values(visibleColumns).filter(v => v).length <= 2 && (
-                                                            <div className="text-xs text-slate-500 italic">Enable more columns in "Show" to filter by them.</div>
+                                                            <div className="text-xs text-slate-500 italic">Enable more columns in &quot;Show&quot; to filter by them.</div>
                                                         )}
                                                     </div>
                                                 </div>
@@ -584,6 +583,7 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                                                     }}
                                                                     className="flex items-center gap-1 hover:text-primary transition-colors hover:bg-primary/10 px-2 py-1 rounded"
                                                                 >
+                                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                                                     <img src={JSON.parse(item.images as string)[0]} alt="thumb" className="w-8 h-8 object-cover rounded shadow-sm border border-slate-200" />
                                                                     {JSON.parse(item.images as string).length > 1 && <span className="text-xs text-slate-500 font-medium">+{JSON.parse(item.images as string).length - 1}</span>}
                                                                 </button>
@@ -653,6 +653,7 @@ export default function Dashboard({ initialItems }: { initialItems: Item[] }) {
                                 >
                                     {selectedItem.images ? (
                                         <>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img
                                                 src={JSON.parse(selectedItem.images)[0] || 'https://placehold.co/400x400?text=No+Image'}
                                                 alt={selectedItem.name}
